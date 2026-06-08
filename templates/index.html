@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ransomware Simulator — Live Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #ff4444;
+      font-size: 1.8em;
+      margin-bottom: 5px;
+      text-shadow: 0 0 10px #ff0000aa;
+    }
+    .subtitle {
+      text-align: center;
+      color: #58a6ff;
+      font-size: 0.85em;
+      margin-bottom: 25px;
+    }
+
+    /* ── STATUS BANNER ── */
+    #status-banner {
+      text-align: center;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 1.1em;
+      font-weight: bold;
+      margin-bottom: 20px;
+      transition: all 0.5s;
+    }
+    .status-idle     { background:#161b22; border:1px solid #30363d; color:#8b949e; }
+    .status-running  { background:#1a2b1a; border:1px solid #3fb950; color:#3fb950;
+                       animation: pulse 1s infinite; }
+    .status-detected { background:#2d1515; border:2px solid #ff4444;   color:#ff4444;
+                       animation: pulse 0.5s infinite; }
+    .status-completed{ background:#1a1a2b; border:1px solid #58a6ff; color:#58a6ff; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+    /* ── GRID ── */
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 15px;
+      text-align: center;
+    }
+    .card .label { font-size: 0.75em; color: #8b949e; margin-bottom: 5px; }
+    .card .value { font-size: 2em; font-weight: bold; }
+    .card.danger  { border-color: #ff4444; }
+    .card.success { border-color: #3fb950; }
+    .card.info    { border-color: #58a6ff; }
+    .card.warning { border-color: #d29922; }
+    .red    { color: #ff4444; }
+    .green  { color: #3fb950; }
+    .blue   { color: #58a6ff; }
+    .yellow { color: #d29922; }
+
+    /* ── CHARTS ROW ── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .chart-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 15px;
+    }
+    .chart-card h3 {
+      font-size: 0.85em;
+      color: #8b949e;
+      margin-bottom: 10px;
+    }
+
+    /* ── FILE TABLE ── */
+    .table-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .table-card h3 { font-size: 0.9em; color: #8b949e; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82em; }
+    th { background: #0d1117; color: #58a6ff; padding: 8px; text-align: left; position:sticky; top:0; }
+    td { padding: 7px 8px; border-bottom: 1px solid #21262d; }
+    tr:hover td { background: #1c2128; }
+    .entropy-bar {
+      background: #21262d;
+      border-radius: 4px;
+      height: 10px;
+      width: 100%;
+    }
+    .entropy-fill {
+      height: 10px;
+      border-radius: 4px;
+      transition: width 0.5s;
+    }
+
+    /* ── LOG ── */
+    .log-card {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 15px;
+      font-size: 0.78em;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .log-card h3 { color: #8b949e; margin-bottom: 8px; font-size: 0.9em; }
+    .log-line { color: #3fb950; margin-bottom: 3px; }
+    .log-line.alert { color: #ff4444; }
+
+    /* ── FOOTER ── */
+    .footer {
+      text-align: center;
+      color: #30363d;
+      font-size: 0.72em;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🔴 RANSOMWARE SIMULATION DASHBOARD</h1>
+<p class="subtitle">Safe Educational Lab | Real-Time Detection &amp; Monitoring</p>
+
+<!-- Status Banner -->
+<div id="status-banner" class="status-idle">⬛ Simulation Idle — Waiting for attack...</div>
+
+<!-- Metric Cards -->
+<div class="grid-4">
+  <div class="card danger">
+    <div class="label">Files Encrypted</div>
+    <div class="value red" id="files-encrypted">0</div>
+  </div>
+  <div class="card warning">
+    <div class="label">Files Renamed (.locked)</div>
+    <div class="value yellow" id="files-locked">0</div>
+  </div>
+  <div class="card success">
+    <div class="label">Modifications Detected</div>
+    <div class="value green" id="mod-count">0</div>
+  </div>
+  <div class="card info">
+    <div class="label">Alerts Triggered</div>
+    <div class="value blue" id="alert-count">0</div>
+  </div>
+</div>
+
+<!-- Charts -->
+<div class="charts-row">
+  <div class="chart-card">
+    <h3>📈 Files Encrypted Over Time</h3>
+    <canvas id="timelineChart" height="130"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>🔢 Entropy Distribution</h3>
+    <canvas id="entropyChart" height="130"></canvas>
+  </div>
+</div>
+
+<!-- Encrypted Files Table -->
+<div class="table-card">
+  <h3>🗂️ Encrypted Files Detail</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Original File</th>
+        <th>Encrypted Name</th>
+        <th>Size (bytes)</th>
+        <th>Entropy (0–8)</th>
+        <th>Entropy Bar</th>
+      </tr>
+    </thead>
+    <tbody id="file-table-body">
+      <tr><td colspan="6" style="text-align:center;color:#555">Waiting for simulation...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Incident Log -->
+<div class="log-card">
+  <h3>📋 Incident Log (Live)</h3>
+  <div id="log-output">No incidents yet.</div>
+</div>
+
+<div class="footer">
+  ⚠️ This is a safe simulation for academic/educational purposes only. No real harm intended or caused. ⚠️
+</div>
+
+<script>
+  // ── Chart Initialization ──
+  const ctxTimeline = document.getElementById('timelineChart').getContext('2d');
+  const timelineChart = new Chart(ctxTimeline, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Files Encrypted',
+        data: [],
+        borderColor: '#ff4444',
+        backgroundColor: 'rgba(255,68,68,0.1)',
+        tension: 0.3,
+        fill: true
+      }]
+    },
+    options: {
+      scales: {
+        x: { ticks: { color:'#8b949e', maxTicksLimit:6 }, grid:{color:'#21262d'} },
+        y: { ticks: { color:'#8b949e' }, grid:{color:'#21262d'}, beginAtZero:true }
+      },
+      plugins: { legend: { labels: { color:'#c9d1d9' } } }
+    }
+  });
+
+  const ctxEntropy = document.getElementById('entropyChart').getContext('2d');
+  const entropyChart = new Chart(ctxEntropy, {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Shannon Entropy',
+        data: [],
+        backgroundColor: (ctx) => {
+          const v = ctx.raw;
+          return v > 7.2 ? 'rgba(255,68,68,0.8)' : 'rgba(55,168,80,0.6)';
+        }
+      }]
+    },
+    options: {
+      scales: {
+        x: { ticks: { color:'#8b949e', maxRotation:45 }, grid:{color:'#21262d'} },
+        y: { ticks: { color:'#8b949e' }, grid:{color:'#21262d'}, min:0, max:8 }
+      },
+      plugins: {
+        legend: { labels: { color:'#c9d1d9' } },
+        annotation: {}
+      }
+    }
+  });
+
+  // ── Entropy color helper ──
+  function entropyColor(e) {
+    if (e >= 7.5) return '#ff4444';
+    if (e >= 6.5) return '#d29922';
+    return '#3fb950';
+  }
+
+  // ── Update status banner ──
+  function updateBanner(status, detected) {
+    const banner = document.getElementById('status-banner');
+    if (detected) {
+      banner.className = 'status-detected';
+      banner.textContent = '🚨 RANSOMWARE DETECTED — System Alert Triggered!';
+    } else if (status === 'running') {
+      banner.className = 'status-running';
+      banner.textContent = '🔴 Attack in Progress — Files Being Encrypted...';
+    } else if (status === 'completed') {
+      banner.className = 'status-completed';
+      banner.textContent = '✅ Simulation Completed';
+    } else if (status === 'stopped_by_detection') {
+      banner.className = 'status-detected';
+      banner.textContent = '🛑 Simulator Stopped by Detection Engine!';
+    } else {
+      banner.className = 'status-idle';
+      banner.textContent = '⬛ Simulation Idle — Waiting for attack...';
+    }
+  }
+
+  // ── Main Refresh Loop ──
+  let lastEncryptedCount = 0;
+  let timeLabels = [];
+  let timeData = [];
+
+  async function refresh() {
+    try {
+      const res  = await fetch('/api/combined');
+      const data = await res.json();
+      const m    = data.metrics   || {};
+      const d    = data.detection || {};
+
+      // Update banner
+      updateBanner(m.status, d.ransomware_detected);
+
+      // Update cards
+      document.getElementById('files-encrypted').textContent = m.files_encrypted ?? 0;
+      document.getElementById('files-locked').textContent    = d.locked_count    ?? 0;
+      document.getElementById('mod-count').textContent       = d.modification_count ?? 0;
+      document.getElementById('alert-count').textContent     = (d.alerts || []).length;
+
+      // Timeline chart update
+      const nowCount = m.files_encrypted ?? 0;
+      if (nowCount !== lastEncryptedCount) {
+        const t = new Date().toLocaleTimeString();
+        timeLabels.push(t);
+        timeData.push(nowCount);
+        if (timeLabels.length > 20) { timeLabels.shift(); timeData.shift(); }
+        timelineChart.data.labels   = timeLabels;
+        timelineChart.data.datasets[0].data = timeData;
+        timelineChart.update();
+        lastEncryptedCount = nowCount;
+      }
+
+      // Entropy chart update
+      const files = m.encrypted_files || [];
+      if (files.length > 0) {
+        entropyChart.data.labels = files.map(f => f.original.replace('document_','doc_'));
+        entropyChart.data.datasets[0].data = files.map(f => f.entropy);
+        entropyChart.update();
+      }
+
+      // File table update
+      const tbody = document.getElementById('file-table-body');
+      if (files.length > 0) {
+        tbody.innerHTML = files.map((f, i) => {
+          const pct  = ((f.entropy / 8) * 100).toFixed(1);
+          const col  = entropyColor(f.entropy);
+          return `<tr>
+            <td>${i+1}</td>
+            <td>${f.original}</td>
+            <td style="color:#ff4444">${f.encrypted}</td>
+            <td>${f.size_bytes}</td>
+            <td style="color:${col}">${f.entropy}</td>
+            <td><div class="entropy-bar"><div class="entropy-fill"
+              style="width:${pct}%;background:${col}"></div></div></td>
+          </tr>`;
+        }).join('');
+      }
+
+    } catch(e) {}
+
+    // Update log
+    try {
+      const lr   = await fetch('/api/log');
+      const ld   = await lr.json();
+      const logDiv = document.getElementById('log-output');
+      if (ld.log && ld.log.length > 0) {
+        logDiv.innerHTML = ld.log.map(line => {
+          const isAlert = line.includes('ALERT') || line.includes('🚨') || line.includes('DETECTED');
+          return `<div class="log-line ${isAlert?'alert':''}">${line.trim()}</div>`;
+        }).reverse().join('');
+      }
+    } catch(e) {}
+  }
+
+  // Refresh every second
+  setInterval(refresh, 1000);
+  refresh();
+</script>
+</body>
+</html>
+
